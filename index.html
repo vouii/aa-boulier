@@ -1,1 +1,320 @@
 
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Boulier chinois (Suanpan) – Interactif</title>
+  <style>
+    :root{
+      --wood:#7b4b2a;
+      --wood-dark:#5f381e;
+      --frame:#3d2818;
+      --bead:#f2d3a2;
+      --bead-shadow:#caa56f;
+      --accent:#0f766e;
+      --text:#0b1020;
+      --muted:#5b6475;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color:var(--text); background:#f6f7fb;
+      display:grid; place-items:start center; padding:24px;
+    }
+    header{max-width:900px; width:100%; margin:0 auto 16px auto;}
+    h1{margin:0 0 8px 0; font-size:clamp(22px,3vw,32px)}
+    p{margin:0; color:var(--muted)}
+
+    .toolbar{
+      display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-top:12px;
+    }
+    .toolbar button, .toolbar select, .toolbar input[type="number"]{
+      border-radius:999px; border:1px solid #d9dde7; padding:10px 14px; background:white; cursor:pointer; font-weight:600;
+      box-shadow:0 1px 2px rgba(0,0,0,.05);
+    }
+    .toolbar button:hover{transform:translateY(-1px)}
+    .toolbar .ghost{background:transparent; border-style:dashed;}
+
+    /* Abacus frame */
+    .abacus-wrap{width:min(100%, 1000px); margin:18px auto;}
+    .abacus{
+      position:relative; width:100%; aspect-ratio: 2.2 / 1; background:linear-gradient(180deg, var(--wood), var(--wood-dark));
+      border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,.15);
+      padding:20px; display:grid; place-items:center;
+    }
+    .frame{
+      position:relative; width:100%; height:100%; border:10px solid var(--frame); border-radius:12px; box-sizing:border-box;
+      background:repeating-linear-gradient(90deg, rgb(0 0 0/3%) 0 4px, transparent 4px 32px);
+      overflow:hidden;
+    }
+
+    /* Beam (la barre centrale) */
+    .beam{position:absolute; left:0; right:0; top:50%; height:10px; background:#27170d; transform:translateY(-50%); box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 2px 6px rgba(0,0,0,.4)}
+
+    /* Rods */
+    .rods{position:absolute; inset:12px; display:grid; grid-auto-flow:column; gap:clamp(6px, 1.2vw, 16px); align-items:stretch}
+    .rod{position:relative; display:grid; grid-template-rows: 1fr 1fr;}
+    .rod::before{
+      content:""; position:absolute; left:50%; top:0; bottom:0; width:6px; transform:translateX(-50%);
+      background:#2b2018; border-radius:3px; box-shadow: inset 0 0 2px rgba(255,255,255,.2);
+    }
+
+    /* Zones */
+    .zone{position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; padding:10px 0}
+    .zone.top{justify-content:flex-start}
+
+    /* Beads */
+    .bead{
+      width:clamp(26px, 3.6vw, 38px); height:clamp(18px, 2.4vw, 26px);
+      background: radial-gradient(120% 100% at 60% 40%, #fff8 0 30%, transparent 30%),
+                  radial-gradient(120% 100% at 40% 60%, #0002 0 30%, transparent 30%),
+                  linear-gradient(180deg, var(--bead), var(--bead-shadow));
+      border-radius:999px; box-shadow:inset 0 -1px 2px rgba(0,0,0,.35), 0 3px 6px rgba(0,0,0,.25);
+      transition: transform .15s cubic-bezier(.2,.8,.2,1), box-shadow .15s ease;
+      cursor:pointer; position:relative;
+    }
+
+    /* Active position visual (towards the beam) */
+    .zone.top .bead.active{ transform: translateY(calc(50vh)); }
+    .zone.bottom .bead.active{ transform: translateY(calc(-50vh)); }
+    /* The translate values above are overridden in JS to snap exactly to the beam using CSS variables */
+    .zone .bead{ transform: translateY(var(--snap, 0px)); }
+
+    /* Value strip */
+    .readout{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .chips{display:flex; gap:6px; flex-wrap:wrap}
+    .chip{background:white; border:1px solid #e3e8f1; box-shadow:0 1px 2px rgba(0,0,0,.06); padding:8px 10px; border-radius:10px; font-weight:600}
+    .chip.muted{opacity:.7}
+    .total{font-size:clamp(22px, 3vw, 30px); font-weight:800; letter-spacing:.5px}
+    .mono{font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+
+    /* Helper dots near the beam */
+    .bump{position:absolute; left:50%; width:10px; height:10px; background:#2b2018; border-radius:50%; transform:translate(-50%, -50%); box-shadow:0 1px 2px rgba(0,0,0,.4)}
+    .bump.top{top:calc(50% - 6px)}
+    .bump.bottom{top:calc(50% + 6px)}
+
+    /* Footer */
+    footer{max-width:900px; margin:10px auto; color:var(--muted); font-size:14px}
+    footer kbd{background:#e9edf7; padding:2px 6px; border-radius:6px; border:1px solid #d9e1f8}
+
+    @media (max-width:700px){
+      .abacus{aspect-ratio: 1 / 1.4}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Boulier chinois (Suanpan) – interactif</h1>
+    <p>Cliquez sur les perles pour les rapprocher/éloigner de la barre centrale. Le total se met à jour en temps réel. Par défaut : 13 tiges, système <strong>2/5</strong> (haut:2, bas:5).</p>
+    <div class="toolbar">
+      <label>Nombre de tiges :
+        <input id="rodCount" type="number" min="1" max="21" value="13" />
+      </label>
+      <button id="applyRodCount">Appliquer</button>
+      <select id="placeDirection">
+        <option value="rtl" selected>Unité à droite (trad.)</option>
+        <option value="ltr">Unité à gauche</option>
+      </select>
+      <button id="reset" class="ghost">Tout remettre à zéro</button>
+    </div>
+    <div class="readout" style="margin-top:12px">
+      <div class="total mono" id="total">0</div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </header>
+
+  <div class="abacus-wrap">
+    <div class="abacus" id="abacus">
+      <div class="frame">
+        <div class="beam"></div>
+        <div class="bump top"></div>
+        <div class="bump bottom"></div>
+        <div class="rods" id="rods"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Astuces : cliquez près de la barre pour activer plusieurs perles d’un coup. <kbd>Double‑clic</kbd> sur une tige pour la remettre à zéro. Les perles « actives » sont celles collées à la barre centrale (elles comptent dans le total).
+  </footer>
+
+  <script>
+    // === Configuration ===
+    const DEFAULT_RODS = 13; // classique sur un suanpan
+    const TOP_BEADS = 2;     // section haute (ciel)
+    const BOTTOM_BEADS = 5;  // section basse (terre)
+
+    const rodsEl = document.getElementById('rods');
+    const totalEl = document.getElementById('total');
+    const chipsEl = document.getElementById('chips');
+
+    const rodCountInput = document.getElementById('rodCount');
+    const applyRodCountBtn = document.getElementById('applyRodCount');
+    const placeDirection = document.getElementById('placeDirection');
+    const resetBtn = document.getElementById('reset');
+
+    let rodStates = []; // [{topActive:0-2, bottomActive:0-5}]
+
+    function createRod(index){
+      const rod = document.createElement('div');
+      rod.className = 'rod';
+      rod.dataset.index = index;
+
+      const top = document.createElement('div');
+      top.className = 'zone top';
+      const bottom = document.createElement('div');
+      bottom.className = 'zone bottom';
+
+      // Create beads nearest to beam first (DOM order matters for click logic)
+      for(let i=0;i<TOP_BEADS;i++){
+        const bead = document.createElement('div');
+        bead.className = 'bead';
+        bead.dataset.zone = 'top';
+        bead.dataset.pos = i; // 0 = plus proche de la barre
+        bead.addEventListener('click', onBeadClick);
+        top.appendChild(bead);
+      }
+      for(let i=0;i<BOTTOM_BEADS;i++){
+        const bead = document.createElement('div');
+        bead.className = 'bead';
+        bead.dataset.zone = 'bottom';
+        bead.dataset.pos = i;
+        bead.addEventListener('click', onBeadClick);
+        // insérer de sorte que le 0 soit près de la barre (en bas de la zone)
+        bottom.insertBefore(bead, bottom.firstChild);
+      }
+
+      // Double‑clic pour réinitialiser la tige
+      rod.addEventListener('dblclick', ()=>{
+        setRodState(index, 0, 0);
+      });
+
+      rod.appendChild(top);
+      rod.appendChild(bottom);
+      return rod;
+    }
+
+    function buildAbacus(count=DEFAULT_RODS){
+      rodsEl.innerHTML='';
+      rodStates = [];
+      for(let i=0;i<count;i++){
+        rodStates.push({topActive:0, bottomActive:0});
+      }
+      const indices = [...Array(count).keys()];
+      const order = placeDirection.value === 'rtl' ? indices : indices.reverse();
+      order.forEach(i=> rodsEl.appendChild(createRod(i)) );
+      layoutSnap();
+      updateReadout();
+    }
+
+    function setRodState(index, topActive, bottomActive){
+      rodStates[index] = {topActive, bottomActive};
+      // Update DOM classes for that rod
+      const rod = [...document.querySelectorAll('.rod')].find(r=>Number(r.dataset.index)===index);
+      if(!rod) return;
+      const topBeads = [...rod.querySelectorAll('.zone.top .bead')];
+      const bottomBeads = [...rod.querySelectorAll('.zone.bottom .bead')];
+      topBeads.forEach((b, i)=> b.classList.toggle('active', i < topActive));
+      bottomBeads.forEach((b, i)=> b.classList.toggle('active', i < bottomActive));
+      updateReadout();
+    }
+
+    function onBeadClick(e){
+      const bead = e.currentTarget;
+      const rod = bead.closest('.rod');
+      const idx = Number(rod.dataset.index);
+      const zone = bead.dataset.zone; // 'top' or 'bottom'
+      const pos = Number(bead.dataset.pos); // 0 near beam
+      const state = rodStates[idx];
+
+      if(zone==='top'){
+        // Clicking sets active count to pos+1 if increasing, otherwise to pos
+        const newCount = (pos+1 > state.topActive) ? pos+1 : pos;
+        setRodState(idx, clamp(newCount, 0, TOP_BEADS), state.bottomActive);
+      } else {
+        const newCount = (pos+1 > state.bottomActive) ? pos+1 : pos;
+        setRodState(idx, state.topActive, clamp(newCount, 0, BOTTOM_BEADS));
+      }
+    }
+
+    function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
+    function computeValue(){
+      // place value depends on position: right-most = 10^0 if rtl, else left-most
+      const count = rodStates.length;
+      let total = 0n;
+      rodStates.forEach((s, logicalIndex)=>{
+        const physicalRodEls = [...document.querySelectorAll('.rod')];
+        const rodEl = physicalRodEls.find(r=>Number(r.dataset.index)===logicalIndex);
+        const physicalPos = physicalRodEls.indexOf(rodEl); // 0..count-1 left->right
+        const place = (placeDirection.value==='rtl') ? (count-1-physicalPos) : physicalPos;
+        const digitValue = BigInt(s.topActive*5 + s.bottomActive);
+        const placeFactor = 10n ** BigInt(place);
+        total += digitValue * placeFactor;
+      });
+      return total;
+    }
+
+    function updateReadout(){
+      const total = computeValue();
+      totalEl.textContent = total.toString();
+      // Chips per rod (optional helper)
+      chipsEl.innerHTML = '';
+      const count = rodStates.length;
+      const physicalRodEls = [...document.querySelectorAll('.rod')];
+      physicalRodEls.forEach((rodEl, physicalPos)=>{
+        const logicalIndex = Number(rodEl.dataset.index);
+        const s = rodStates[logicalIndex];
+        const v = s.topActive*5 + s.bottomActive;
+        const place = (placeDirection.value==='rtl') ? (count-1-physicalPos) : physicalPos;
+        const chip = document.createElement('span');
+        chip.className = 'chip mono ' + (v===0 ? 'muted':'' );
+        chip.textContent = `${v} × 10^${place}`;
+        chipsEl.appendChild(chip);
+      });
+    }
+
+    function layoutSnap(){
+      // Compute CSS variable --snap so active beads visually snap to the beam
+      const frame = document.querySelector('.frame');
+      const beamY = frame.getBoundingClientRect().top + frame.clientHeight/2;
+      document.querySelectorAll('.zone').forEach(zone=>{
+        const isTop = zone.classList.contains('top');
+        const beads = zone.querySelectorAll('.bead');
+        beads.forEach(bead=>{
+          const r = bead.getBoundingClientRect();
+          const center = r.top + r.height/2;
+          const delta = isTop ? (beamY - center - 9) : (beamY - center + 9); // small offset to leave a tiny gap
+          bead.style.setProperty('--snap', '0px'); // reset first
+          // We only apply snap visually when bead has .active (done by CSS rule)
+          // but we store the proper distance now in a data attr and CSS var
+          bead.style.setProperty('--snap', `${delta}px`);
+        });
+      });
+    }
+
+    // Recompute snap on resize
+    new ResizeObserver(()=> layoutSnap()).observe(document.body);
+    window.addEventListener('load', ()=> layoutSnap());
+    window.addEventListener('orientationchange', ()=> setTimeout(layoutSnap, 200));
+
+    // Controls
+    applyRodCountBtn.addEventListener('click', ()=>{
+      const n = clamp(Number(rodCountInput.value||DEFAULT_RODS), 1, 21);
+      rodCountInput.value = n;
+      buildAbacus(n);
+    });
+    resetBtn.addEventListener('click', ()=>{
+      rodStates = rodStates.map(()=>({topActive:0, bottomActive:0}));
+      document.querySelectorAll('.bead.active').forEach(b=> b.classList.remove('active'));
+      updateReadout();
+    });
+    placeDirection.addEventListener('change', ()=> buildAbacus(rodStates.length));
+
+    // Init
+    rodCountInput.value = DEFAULT_RODS;
+    buildAbacus(DEFAULT_RODS);
+  </script>
+</body>
+</html>
